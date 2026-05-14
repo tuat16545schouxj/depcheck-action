@@ -1,0 +1,11 @@
+node_modules/
+*.js.map
+Thumbs.db
+.next/
+.DS_Store
+*.tsbuildinfo
+.env
+.cache/
+build/
+coverage/
+out/
