@@ -1,60 +1,52 @@
-from __future__ import annotations
-
-from pathlib import Path
-from typing import List, Optional
-
-from .base import BaseDetector, DetectionResult
-from .node_detector import NodeDetector
+from typing import List, Dict
+from .base import DetectionResult
 from .python_detector import PythonDetector
+from .node_detector import NodeDetector
 from .ruby_detector import RubyDetector
+from .go_detector import GoDetector
 
 
-_DETECTORS: List[BaseDetector] = [
-    PythonDetector(),
-    NodeDetector(),
-    RubyDetector(),
-]
+def get_all_detectors():
+    """Return an instance of every registered detector."""
+    return [
+        PythonDetector(),
+        NodeDetector(),
+        RubyDetector(),
+        GoDetector(),
+    ]
 
 
-def get_all_detectors() -> List[BaseDetector]:
-    """Return every registered detector instance."""
-    return list(_DETECTORS)
-
-
-def detect_for_file(filepath: str) -> Optional[DetectionResult]:
-    """Run the first matching detector against *filepath*."""
-    filename = Path(filepath).name
-    for detector in _DETECTORS:
-        if detector.supports(filename):
-            return detector.detect(filepath)
-    return None
-
-
-def detect_all(filepaths: List[str]) -> List[DetectionResult]:
-    """Run appropriate detectors for each file path in *filepaths*."""
-    results: List[DetectionResult] = []
-    for fp in filepaths:
-        result = detect_for_file(fp)
-        if result is not None:
-            results.append(result)
+def detect_for_file(filepath: str) -> List[DetectionResult]:
+    """Run all detectors that support the given file and return results."""
+    results = []
+    for detector in get_all_detectors():
+        if detector.supports(filepath):
+            results.append(detector.detect(filepath))
     return results
 
 
-def summary(results: List[DetectionResult]) -> str:
-    """Return a human-readable summary of all detection results."""
-    if not results:
-        return "No supported manifest files detected."
-    lines = ["Dependency Audit Summary", "=" * 40]
-    total_deps = 0
-    total_outdated = 0
-    for r in results:
-        lines.append(r.summary())
-        for dep in r.outdated:
-            lines.append(
-                f"  - {dep.name}: {dep.current_version} -> {dep.latest_version}"
-            )
-        total_deps += len(r.dependencies)
-        total_outdated += len(r.outdated)
-    lines.append("=" * 40)
-    lines.append(f"Total: {total_outdated} outdated out of {total_deps} dependencies")
-    return "\n".join(lines)
+def detect_all(filepaths: List[str]) -> List[DetectionResult]:
+    """Run detection across a list of file paths."""
+    results = []
+    for filepath in filepaths:
+        results.extend(detect_for_file(filepath))
+    return results
+
+
+def summary(results: List[DetectionResult]) -> Dict:
+    """Produce a summary dict grouped by ecosystem."""
+    grouped: Dict[str, Dict] = {}
+    for result in results:
+        eco = result.ecosystem
+        if eco not in grouped:
+            grouped[eco] = {"source_files": [], "total": 0, "outdated": 0, "dependencies": []}
+        grouped[eco]["source_files"].append(result.source_file)
+        grouped[eco]["total"] += len(result.dependencies)
+        outdated = [d for d in result.dependencies if d.outdated]
+        grouped[eco]["outdated"] += len(outdated)
+        grouped[eco]["dependencies"].extend([d.to_dict() for d in result.dependencies])
+    return {
+        "ecosystems": grouped,
+        "total_dependencies": sum(v["total"] for v in grouped.values()),
+        "total_outdated": sum(v["outdated"] for v in grouped.values()),
+    }
