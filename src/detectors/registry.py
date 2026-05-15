@@ -1,50 +1,60 @@
-"""Detector registry — discovers and returns the right detector for a repo."""
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Type
+from typing import List, Optional
 
 from .base import BaseDetector, DetectionResult
-from .python_detector import PythonDetector
 from .node_detector import NodeDetector
+from .python_detector import PythonDetector
+from .ruby_detector import RubyDetector
 
-# All available detectors in priority order
-_DETECTOR_CLASSES: list[Type[BaseDetector]] = [
-    PythonDetector,
-    NodeDetector,
+
+_DETECTORS: List[BaseDetector] = [
+    PythonDetector(),
+    NodeDetector(),
+    RubyDetector(),
 ]
 
 
-def get_all_detectors() -> list[BaseDetector]:
-    """Return one instance of every registered detector."""
-    return [cls() for cls in _DETECTOR_CLASSES]
+def get_all_detectors() -> List[BaseDetector]:
+    """Return every registered detector instance."""
+    return list(_DETECTORS)
 
 
-def detect_all(repo_path: Path) -> list[DetectionResult]:
-    """Run every detector against *repo_path* and return non-empty results."""
-    results: list[DetectionResult] = []
-    for detector in get_all_detectors():
-        result = detector.detect(repo_path)
-        if result.manifests:  # only include ecosystems that found something
+def detect_for_file(filepath: str) -> Optional[DetectionResult]:
+    """Run the first matching detector against *filepath*."""
+    filename = Path(filepath).name
+    for detector in _DETECTORS:
+        if detector.supports(filename):
+            return detector.detect(filepath)
+    return None
+
+
+def detect_all(filepaths: List[str]) -> List[DetectionResult]:
+    """Run appropriate detectors for each file path in *filepaths*."""
+    results: List[DetectionResult] = []
+    for fp in filepaths:
+        result = detect_for_file(fp)
+        if result is not None:
             results.append(result)
     return results
 
 
-def detect_for_file(file_path: Path) -> list[BaseDetector]:
-    """Return detectors that claim to support the given file path."""
-    return [
-        detector
-        for detector in get_all_detectors()
-        if detector.supports(file_path)
-    ]
-
-
-def summary(results: list[DetectionResult]) -> dict:
-    """Produce a JSON-serialisable summary of all detection results."""
-    return {
-        "ecosystems_scanned": len(results),
-        "total_dependencies": sum(len(r.dependencies) for r in results),
-        "outdated_dependencies": sum(
-            sum(1 for d in r.dependencies if d.latest_version and d.outdated)
-            for r in results
-        ),
-        "results": [r.to_dict() for r in results],
-    }
+def summary(results: List[DetectionResult]) -> str:
+    """Return a human-readable summary of all detection results."""
+    if not results:
+        return "No supported manifest files detected."
+    lines = ["Dependency Audit Summary", "=" * 40]
+    total_deps = 0
+    total_outdated = 0
+    for r in results:
+        lines.append(r.summary())
+        for dep in r.outdated:
+            lines.append(
+                f"  - {dep.name}: {dep.current_version} -> {dep.latest_version}"
+            )
+        total_deps += len(r.dependencies)
+        total_outdated += len(r.outdated)
+    lines.append("=" * 40)
+    lines.append(f"Total: {total_outdated} outdated out of {total_deps} dependencies")
+    return "\n".join(lines)

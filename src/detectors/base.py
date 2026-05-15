@@ -1,24 +1,26 @@
-"""Base class for dependency detectors across different ecosystems."""
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import List, Optional
 
 
 @dataclass
 class Dependency:
-    """Represents a single dependency with version information."""
-
     name: str
     current_version: str
     latest_version: Optional[str] = None
-    ecosystem: str = ""
-    manifest_file: str = ""
-    is_outdated: bool = False
+    ecosystem: Optional[str] = None
 
     def __post_init__(self):
-        if self.latest_version and self.current_version != self.latest_version:
-            self.is_outdated = True
+        self.current_version = self.current_version.lstrip("^~>= ")
+
+    @property
+    def outdated(self) -> bool:
+        return (
+            self.latest_version is not None
+            and self.latest_version != self.current_version
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -26,45 +28,43 @@ class Dependency:
             "current_version": self.current_version,
             "latest_version": self.latest_version,
             "ecosystem": self.ecosystem,
-            "manifest_file": self.manifest_file,
-            "is_outdated": self.is_outdated,
+            "outdated": self.outdated,
         }
 
 
 @dataclass
 class DetectionResult:
-    """Result of a dependency detection run for a given ecosystem."""
-
     ecosystem: str
-    manifest_file: str
-    dependencies: list[Dependency] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
+    manifest_path: str
+    dependencies: List[Dependency] = field(default_factory=list)
+    outdated: List[Dependency] = field(default_factory=list)
 
-    @property
-    def outdated(self) -> list[Dependency]:
-        return [d for d in self.dependencies if d.is_outdated]
+    def summary(self) -> str:
+        total = len(self.dependencies)
+        out = len(self.outdated)
+        return (
+            f"[{self.ecosystem}] {self.manifest_path}: "
+            f"{out} outdated out of {total} dependencies"
+        )
 
-    @property
-    def total(self) -> int:
-        return len(self.dependencies)
+    def to_dict(self) -> dict:
+        return {
+            "ecosystem": self.ecosystem,
+            "manifest_path": self.manifest_path,
+            "dependencies": [d.to_dict() for d in self.dependencies],
+            "outdated": [d.to_dict() for d in self.outdated],
+        }
 
 
 class BaseDetector(ABC):
-    """Abstract base class for all ecosystem-specific dependency detectors."""
+    """Abstract base class for all ecosystem detectors."""
 
-    ecosystem: str = ""
-    manifest_files: list[str] = []
-
-    @abstractmethod
-    def detect(self, repo_path: str) -> list[DetectionResult]:
-        """Scan the repository and return detection results."""
-        ...
+    name: str = "base"
 
     @abstractmethod
-    def resolve_latest(self, dependency: Dependency) -> Dependency:
-        """Fetch the latest available version for a dependency."""
-        ...
-
     def supports(self, filename: str) -> bool:
-        """Return True if this detector handles the given manifest filename."""
-        return any(filename.endswith(m) for m in self.manifest_files)
+        """Return True if this detector can handle the given filename."""
+
+    @abstractmethod
+    def detect(self, filepath: str) -> DetectionResult:
+        """Analyse the manifest at *filepath* and return a DetectionResult."""
