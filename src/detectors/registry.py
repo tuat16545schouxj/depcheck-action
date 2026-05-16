@@ -4,24 +4,30 @@ from .python_detector import PythonDetector
 from .node_detector import NodeDetector
 from .ruby_detector import RubyDetector
 from .go_detector import GoDetector
+from .rust_detector import RustDetector
+
+
+_DETECTORS = [
+    PythonDetector(),
+    NodeDetector(),
+    RubyDetector(),
+    GoDetector(),
+    RustDetector(),
+]
 
 
 def get_all_detectors():
-    """Return an instance of every registered detector."""
-    return [
-        PythonDetector(),
-        NodeDetector(),
-        RubyDetector(),
-        GoDetector(),
-    ]
+    """Return all registered detector instances."""
+    return list(_DETECTORS)
 
 
 def detect_for_file(filepath: str) -> List[DetectionResult]:
     """Run all detectors that support the given file and return results."""
     results = []
-    for detector in get_all_detectors():
+    for detector in _DETECTORS:
         if detector.supports(filepath):
-            results.append(detector.detect(filepath))
+            result = detector.detect(filepath)
+            results.append(result)
     return results
 
 
@@ -34,19 +40,25 @@ def detect_all(filepaths: List[str]) -> List[DetectionResult]:
 
 
 def summary(results: List[DetectionResult]) -> Dict:
-    """Produce a summary dict grouped by ecosystem."""
-    grouped: Dict[str, Dict] = {}
+    """Produce a summary dict from a list of DetectionResults."""
+    total_deps = 0
+    outdated_deps = 0
+    by_ecosystem: Dict[str, Dict] = {}
+
     for result in results:
         eco = result.ecosystem
-        if eco not in grouped:
-            grouped[eco] = {"source_files": [], "total": 0, "outdated": 0, "dependencies": []}
-        grouped[eco]["source_files"].append(result.source_file)
-        grouped[eco]["total"] += len(result.dependencies)
-        outdated = [d for d in result.dependencies if d.outdated]
-        grouped[eco]["outdated"] += len(outdated)
-        grouped[eco]["dependencies"].extend([d.to_dict() for d in result.dependencies])
+        if eco not in by_ecosystem:
+            by_ecosystem[eco] = {"total": 0, "outdated": 0, "files": []}
+        by_ecosystem[eco]["files"].append(result.source_file)
+        for dep in result.dependencies:
+            total_deps += 1
+            by_ecosystem[eco]["total"] += 1
+            if dep.outdated:
+                outdated_deps += 1
+                by_ecosystem[eco]["outdated"] += 1
+
     return {
-        "ecosystems": grouped,
-        "total_dependencies": sum(v["total"] for v in grouped.values()),
-        "total_outdated": sum(v["outdated"] for v in grouped.values()),
+        "total_dependencies": total_deps,
+        "outdated_dependencies": outdated_deps,
+        "by_ecosystem": by_ecosystem,
     }
