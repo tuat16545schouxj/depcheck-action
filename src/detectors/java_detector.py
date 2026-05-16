@@ -25,7 +25,10 @@ class JavaDetector(BaseDetector):
 
     def _parse_pom_xml(self, path: Path) -> List[Dependency]:
         deps = []
-        content = path.read_text(encoding="utf-8")
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError as e:
+            raise RuntimeError(f"Failed to read {path}: {e}") from e
         # Match <dependency> blocks
         block_re = re.compile(r"<dependency>(.*?)</dependency>", re.DOTALL)
         group_re = re.compile(r"<groupId>([^<]+)</groupId>")
@@ -46,7 +49,10 @@ class JavaDetector(BaseDetector):
 
     def _parse_build_gradle(self, path: Path) -> List[Dependency]:
         deps = []
-        content = path.read_text(encoding="utf-8")
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError as e:
+            raise RuntimeError(f"Failed to read {path}: {e}") from e
         # Match patterns like: implementation 'group:artifact:version'
         # or implementation("group:artifact:version")
         dep_re = re.compile(
