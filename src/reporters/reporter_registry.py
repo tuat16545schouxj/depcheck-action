@@ -1,13 +1,9 @@
 """Central registry of all available reporters.
 
-Usage::
-
-    from src.reporters.reporter_registry import get_reporter, available_reporters
-
-    reporter = get_reporter("markdown")
-    print(reporter.render(results))
+Reporters are looked up by short name (e.g. ``"markdown"``, ``"json"``).
+New reporters only need to be added to ``_REGISTRY``; everything else is
+automatic.
 """
-
 from __future__ import annotations
 
 from typing import Dict, List, Type
@@ -17,12 +13,14 @@ from src.reporters.console_reporter import ConsoleReporter
 from src.reporters.csv_reporter import CsvReporter
 from src.reporters.dashboard_reporter import DashboardReporter
 from src.reporters.email_reporter import EmailReporter
+from src.reporters.github_pr_reporter import GitHubPRReporter
 from src.reporters.graphite_reporter import GraphiteReporter
 from src.reporters.html_reporter import HtmlReporter
 from src.reporters.json_reporter import JsonReporter
 from src.reporters.junit_reporter import JUnitReporter
 from src.reporters.markdown_reporter import MarkdownReporter
 from src.reporters.pdf_reporter import PdfReporter
+from src.reporters.prometheus_reporter import PrometheusReporter
 from src.reporters.sarif_reporter import SarifReporter
 from src.reporters.slack_reporter import SlackReporter
 from src.reporters.toml_reporter import TomlReporter
@@ -34,12 +32,14 @@ _REGISTRY: Dict[str, Type] = {
     "csv": CsvReporter,
     "dashboard": DashboardReporter,
     "email": EmailReporter,
+    "github_pr": GitHubPRReporter,
     "graphite": GraphiteReporter,
     "html": HtmlReporter,
     "json": JsonReporter,
     "junit": JUnitReporter,
     "markdown": MarkdownReporter,
     "pdf": PdfReporter,
+    "prometheus": PrometheusReporter,
     "sarif": SarifReporter,
     "slack": SlackReporter,
     "toml": TomlReporter,
@@ -48,24 +48,26 @@ _REGISTRY: Dict[str, Type] = {
 
 
 def available_reporters() -> List[str]:
-    """Return a sorted list of reporter names."""
+    """Return a sorted list of registered reporter names."""
     return sorted(_REGISTRY.keys())
 
 
 def get_reporter_class(name: str) -> Type:
-    """Return the reporter class for *name* or raise *KeyError*."""
+    """Return the reporter class for *name*.
+
+    Raises:
+        KeyError: if *name* is not registered.
+    """
     try:
-        return _REGISTRY[name.lower()]
+        return _REGISTRY[name]
     except KeyError:
+        available = ", ".join(available_reporters())
         raise KeyError(
-            f"Unknown reporter '{name}'. Available: {', '.join(available_reporters())}"
-        )
+            f"Unknown reporter '{name}'. Available reporters: {available}"
+        ) from None
 
 
 def get_reporter(name: str, **kwargs):
-    """Instantiate and return the reporter identified by *name*.
-
-    Extra *kwargs* are forwarded to the reporter constructor.
-    """
+    """Instantiate and return the reporter for *name*, forwarding **kwargs**."""
     cls = get_reporter_class(name)
     return cls(**kwargs)
