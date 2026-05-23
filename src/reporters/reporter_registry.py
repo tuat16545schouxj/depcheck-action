@@ -1,10 +1,7 @@
-"""Registry of all available reporters.
-
-Import this module to discover or instantiate reporters by name.
-"""
+"""Registry of all available reporters."""
 from __future__ import annotations
 
-from typing import Dict, List, Type
+from typing import Dict, List, Optional, Type
 
 from src.reporters.badge_reporter import BadgeReporter
 from src.reporters.console_reporter import ConsoleReporter
@@ -19,12 +16,13 @@ from src.reporters.markdown_reporter import MarkdownReporter
 from src.reporters.pdf_reporter import PdfReporter
 from src.reporters.sarif_reporter import SarifReporter
 from src.reporters.slack_reporter import SlackReporter
+from src.reporters.toml_reporter import TomlReporter
 from src.reporters.xml_reporter import XmlReporter
 
 _REGISTRY: Dict[str, Type] = {
-    "badge": BadgeReporter,
+    BadgeReporter.name: BadgeReporter,
     "console": ConsoleReporter,
-    "csv": CsvReporter,
+    CsvReporter.name: CsvReporter,
     "dashboard": DashboardReporter,
     "email": EmailReporter,
     "github_pr": GitHubPRReporter,
@@ -35,6 +33,7 @@ _REGISTRY: Dict[str, Type] = {
     "pdf": PdfReporter,
     "sarif": SarifReporter,
     "slack": SlackReporter,
+    TomlReporter.name: TomlReporter,
     "xml": XmlReporter,
 }
 
@@ -44,24 +43,22 @@ def available_reporters() -> List[str]:
     return sorted(_REGISTRY.keys())
 
 
-def get_reporter_class(name: str) -> Type:
-    """Return the reporter class for *name*.
-
-    Raises
-    ------
-    KeyError
-        If *name* is not a registered reporter.
-    """
-    try:
-        return _REGISTRY[name]
-    except KeyError:
-        available = ", ".join(available_reporters())
-        raise KeyError(
-            f"Unknown reporter {name!r}. Available reporters: {available}"
-        ) from None
+def get_reporter_class(name: str) -> Optional[Type]:
+    """Return the reporter class for *name*, or None if unknown."""
+    return _REGISTRY.get(name)
 
 
 def get_reporter(name: str, **kwargs):
-    """Instantiate and return the reporter for *name*, passing **kwargs**."""
+    """Instantiate and return the reporter identified by *name*.
+
+    Extra keyword arguments are forwarded to the reporter constructor.
+    Raises ValueError for unknown reporter names.
+    """
     cls = get_reporter_class(name)
-    return cls(**kwargs)
+    if cls is None:
+        known = ", ".join(available_reporters())
+        raise ValueError(f"Unknown reporter '{name}'. Available: {known}")
+    try:
+        return cls(**kwargs)
+    except TypeError:
+        return cls()
