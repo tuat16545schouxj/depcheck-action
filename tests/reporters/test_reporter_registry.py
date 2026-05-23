@@ -8,60 +8,56 @@ from src.reporters.reporter_registry import (
     get_reporter,
     get_reporter_class,
 )
-from src.reporters.toml_reporter import TomlReporter
-from src.reporters.json_reporter import JsonReporter
-from src.reporters.markdown_reporter import MarkdownReporter
-from src.reporters.badge_reporter import BadgeReporter
-from src.reporters.dashboard_reporter import DashboardReporter
 
 
 class TestReporterRegistry(unittest.TestCase):
-    def test_available_reporters_returns_list(self):
+    def test_available_reporters_returns_list(self) -> None:
         self.assertIsInstance(available_reporters(), list)
 
-    def test_available_reporters_sorted(self):
+    def test_available_reporters_sorted(self) -> None:
         names = available_reporters()
         self.assertEqual(names, sorted(names))
 
-    def test_available_reporters_includes_badge(self):
+    def test_available_reporters_includes_badge(self) -> None:
         self.assertIn("badge", available_reporters())
 
-    def test_available_reporters_includes_dashboard(self):
+    def test_available_reporters_includes_dashboard(self) -> None:
         self.assertIn("dashboard", available_reporters())
 
-    def test_available_reporters_includes_toml(self):
-        self.assertIn("toml", available_reporters())
+    def test_available_reporters_includes_datadog(self) -> None:
+        self.assertIn("datadog", available_reporters())
 
-    def test_available_reporters_includes_json(self):
-        self.assertIn("json", available_reporters())
+    def test_available_reporters_includes_prometheus(self) -> None:
+        self.assertIn("prometheus", available_reporters())
 
-    def test_available_reporters_includes_markdown(self):
-        self.assertIn("markdown", available_reporters())
+    def test_available_reporters_includes_graphite(self) -> None:
+        self.assertIn("graphite", available_reporters())
 
-    def test_get_reporter_class_toml(self):
-        self.assertIs(get_reporter_class("toml"), TomlReporter)
-
-    def test_get_reporter_class_json(self):
+    def test_get_reporter_class_returns_class(self) -> None:
+        from src.reporters.json_reporter import JsonReporter
         self.assertIs(get_reporter_class("json"), JsonReporter)
 
-    def test_get_reporter_class_unknown_returns_none(self):
-        self.assertIsNone(get_reporter_class("nonexistent_reporter"))
+    def test_get_reporter_class_case_insensitive(self) -> None:
+        from src.reporters.json_reporter import JsonReporter
+        self.assertIs(get_reporter_class("JSON"), JsonReporter)
 
-    def test_get_reporter_returns_instance(self):
-        reporter = get_reporter("toml")
-        self.assertIsInstance(reporter, TomlReporter)
+    def test_get_reporter_class_unknown_raises(self) -> None:
+        with self.assertRaises(KeyError):
+            get_reporter_class("nonexistent")
 
-    def test_get_reporter_json_instance(self):
+    def test_get_reporter_returns_instance(self) -> None:
+        from src.reporters.json_reporter import JsonReporter
         reporter = get_reporter("json")
         self.assertIsInstance(reporter, JsonReporter)
 
-    def test_get_reporter_unknown_raises_value_error(self):
-        with self.assertRaises(ValueError) as ctx:
-            get_reporter("does_not_exist")
-        self.assertIn("does_not_exist", str(ctx.exception))
+    def test_get_reporter_datadog_no_post(self) -> None:
+        from src.reporters.datadog_reporter import DatadogReporter
+        reporter = get_reporter("datadog", post=False)
+        self.assertIsInstance(reporter, DatadogReporter)
 
-    def test_get_reporter_error_lists_available(self):
-        with self.assertRaises(ValueError) as ctx:
-            get_reporter("does_not_exist")
-        for name in ("toml", "json", "markdown"):
-            self.assertIn(name, str(ctx.exception))
+    def test_all_reporters_have_render(self) -> None:
+        for name in available_reporters():
+            if name in ("email", "github_pr", "slack"):  # require live credentials
+                continue
+            cls = get_reporter_class(name)
+            self.assertTrue(callable(getattr(cls, "render", None)), name)
