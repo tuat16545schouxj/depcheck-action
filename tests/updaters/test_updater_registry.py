@@ -70,3 +70,21 @@ class TestUpdaterRegistry(unittest.TestCase):
 
         mock_updater.update.assert_not_called()
         self.assertEqual(summaries, {})
+
+    def test_apply_updates_multiple_files(self):
+        """Each file should be matched to a supporting updater independently."""
+        mock_updater = MagicMock()
+        mock_updater.supports.side_effect = lambda f: f == "requirements.txt"
+        mock_summary = MagicMock()
+        mock_updater.update.return_value = mock_summary
+
+        deps_py = [_dep("requests")]
+        deps_js = [_dep("lodash", ecosystem="node")]
+        file_deps = {"requirements.txt": deps_py, "package.json": deps_js}
+
+        with patch("src.updaters.registry.get_all_updaters", return_value=[mock_updater]):
+            summaries = apply_updates(file_deps)
+
+        mock_updater.update.assert_called_once_with("requirements.txt", deps_py)
+        self.assertIn("requirements.txt", summaries)
+        self.assertNotIn("package.json", summaries)
