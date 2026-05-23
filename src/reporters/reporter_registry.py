@@ -1,64 +1,61 @@
-"""Registry of all available reporters.
-
-Usage::
-
-    from src.reporters.reporter_registry import get_reporter
-    reporter = get_reporter("markdown")
-    output = reporter.render(results)
-"""
+"""Registry of all available reporters."""
 from __future__ import annotations
 
-from typing import Dict, Type
+from typing import Dict, List, Type
 
-from src.reporters.console_reporter import ConsoleReporter
-from src.reporters.csv_reporter import CsvReporter
-from src.reporters.email_reporter import EmailReporter
-from src.reporters.html_reporter import HtmlReporter
-from src.reporters.json_reporter import JsonReporter
 from src.reporters.markdown_reporter import MarkdownReporter
+from src.reporters.json_reporter import JsonReporter
+from src.reporters.console_reporter import ConsoleReporter
 from src.reporters.sarif_reporter import SarifReporter
 from src.reporters.slack_reporter import SlackReporter
+from src.reporters.html_reporter import HtmlReporter
+from src.reporters.csv_reporter import CsvReporter
 from src.reporters.xml_reporter import XmlReporter
+from src.reporters.email_reporter import EmailReporter
+from src.reporters.badge_reporter import BadgeReporter
 
-# Map of lowercase format name -> reporter class
 _REGISTRY: Dict[str, Type] = {
-    "console": ConsoleReporter,
-    "csv": CsvReporter,
-    "email": EmailReporter,
-    "html": HtmlReporter,
-    "json": JsonReporter,
     "markdown": MarkdownReporter,
+    "json": JsonReporter,
+    "console": ConsoleReporter,
     "sarif": SarifReporter,
     "slack": SlackReporter,
+    "html": HtmlReporter,
+    "csv": CsvReporter,
     "xml": XmlReporter,
+    "email": EmailReporter,
+    "badge": BadgeReporter,
 }
 
 
-def available_reporters() -> list[str]:
-    """Return sorted list of registered reporter format names."""
+def available_reporters() -> List[str]:
+    """Return a sorted list of reporter names."""
     return sorted(_REGISTRY.keys())
 
 
-def get_reporter_class(fmt: str) -> Type:
-    """Return the reporter *class* for *fmt*.
+def get_reporter_class(name: str) -> Type:
+    """Return the reporter class for *name*.
 
     Raises
     ------
     KeyError
-        If *fmt* is not a known reporter format.
+        If *name* is not a registered reporter.
     """
-    fmt = fmt.lower().strip()
-    if fmt not in _REGISTRY:
-        raise KeyError(
-            f"Unknown reporter '{fmt}'. Available: {', '.join(available_reporters())}"
-        )
-    return _REGISTRY[fmt]
+    try:
+        return _REGISTRY[name.lower()]
+    except KeyError:
+        known = ", ".join(available_reporters())
+        raise KeyError(f"Unknown reporter {name!r}. Known reporters: {known}") from None
 
 
-def get_reporter(fmt: str, **kwargs):
-    """Instantiate and return a reporter for *fmt*.
+def get_reporter(name: str, **kwargs):
+    """Instantiate and return the reporter identified by *name*.
 
-    Extra *kwargs* are forwarded to the reporter constructor.
+    Extra keyword arguments are forwarded to the reporter constructor.
     """
-    cls = get_reporter_class(fmt)
-    return cls(**kwargs)
+    cls = get_reporter_class(name)
+    try:
+        return cls(**kwargs)
+    except TypeError:
+        # Reporter may not accept kwargs — fall back to no-arg construction.
+        return cls()
