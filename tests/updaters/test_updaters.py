@@ -41,6 +41,13 @@ class TestPythonUpdater(unittest.TestCase):
         result = self.updater.update(path, "requests", "2.28.0", "2.31.0")
         self.assertFalse(result.success)
 
+    def test_update_does_not_modify_other_deps(self):
+        """Ensure updating one dependency leaves other dependencies unchanged."""
+        path = self._write("requirements.txt", "requests==2.28.0\nflask>=2.0.0\n")
+        self.updater.update(path, "requests", "2.28.0", "2.31.0")
+        content = open(path).read()
+        self.assertIn("flask>=2.0.0", content)
+
 
 class TestNodeUpdater(unittest.TestCase):
     def setUp(self):
@@ -69,6 +76,14 @@ class TestNodeUpdater(unittest.TestCase):
         data = json.loads(open(path).read())
         self.assertEqual(data["dependencies"]["axios"], "^1.4.0")
 
+    def test_update_dev_dependency(self):
+        """Ensure a dev dependency can be updated when not present in dependencies."""
+        path = self._write_pkg({"lodash": "4.17.21"}, dev_deps={"jest": "^28.0.0"})
+        result = self.updater.update(path, "jest", "28.0.0", "29.0.0")
+        self.assertTrue(result.success)
+        data = json.loads(open(path).read())
+        self.assertEqual(data["devDependencies"]["jest"], "^29.0.0")
+
     def test_update_missing_dep_fails(self):
         path = self._write_pkg({"lodash": "4.17.21"})
         result = self.updater.update(path, "axios", "0.27.0", "1.4.0")
@@ -79,22 +94,4 @@ class TestUpdaterRegistry(unittest.TestCase):
     def test_updater_for_requirements_txt(self):
         updater = updater_for_file("requirements.txt")
         self.assertIsNotNone(updater)
-        self.assertEqual(updater.ecosystem, "python")
-
-    def test_updater_for_package_json(self):
-        updater = updater_for_file("package.json")
-        self.assertIsNotNone(updater)
-        self.assertEqual(updater.ecosystem, "node")
-
-    def test_updater_for_unknown_returns_none(self):
-        self.assertIsNone(updater_for_file("Makefile"))
-
-    def test_apply_updates_unknown_file(self):
-        summary = apply_updates([{"file_path": "Makefile", "name": "foo",
-                                   "old_version": "1.0", "new_version": "2.0"}])
-        self.assertEqual(len(summary.failed), 1)
-        self.assertEqual(summary.failed[0].ecosystem, "unknown")
-
-
-if __name__ == "__main__":
-    unittest.main()
+        self.assertEqual(updater.eco
